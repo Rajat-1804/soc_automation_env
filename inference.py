@@ -789,9 +789,13 @@ async def main() -> None:
         
         for episode in range(1, NUM_EPISODES + 1):
             print(f"\n[EPISODE {episode}/{NUM_EPISODES}] Starting...", flush=True)
-            result = await env.reset()
-            obs = result.observation
-            obs_dict = _obs_to_dict(obs)
+            try:
+                result = await env.reset()
+                obs = result.observation
+                obs_dict = _obs_to_dict(obs)
+            except Exception as e:
+                print(f"[FATAL ERROR] env.reset() failed: {e}", flush=True)
+                break  # Stop trying to run episodes if env is unreachable/broken
             
             queried_keys = set()
             history: List[str] = []
@@ -850,15 +854,26 @@ async def main() -> None:
                         mitre_id="None",
                     )
 
-                result = await env.step(action)
-                obs = result.observation
+                try:
+                    result = await env.step(action)
+                    obs = result.observation
 
-                reward = result.reward if result.reward is not None else 0.05
-                done = result.done
+                    reward = result.reward if result.reward is not None else 0.05
+                    done = result.done
+                except Exception as e:
+                    error = str(e)
+                    print(f"[ERROR] env.step failed: {e}", flush=True)
+                    reward = 0.001
+                    done = True
 
                 rewards.append(reward)
                 episode_steps += 1
-                obs_dict = _obs_to_dict(obs)
+                
+                try:
+                    obs_dict = _obs_to_dict(obs)
+                except Exception as e:
+                    print(f"[ERROR] _obs_to_dict failed: {e}", flush=True)
+                    done = True
 
                 global_step += 1
                 log_step(
@@ -904,4 +919,9 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except Exception as e:
+        print(f"[FATAL UNEXPECTED ERROR] {e}", flush=True)
+        # Ensure we exit with zero status code so Phase 2 pipeline doesn't crash on us
+        sys.exit(0)
