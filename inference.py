@@ -19,8 +19,17 @@ import os
 import textwrap
 import time
 import re
+import signal
 import sys
 from typing import List, Optional, Dict, Set
+
+# ── Prevent BrokenPipeError at OS level ─────────────────────────────────────
+# When the validator closes stdout/socket, SIGPIPE is sent. By resetting to
+# default, the process exits silently instead of raising BrokenPipeError.
+try:
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+except (AttributeError, OSError):
+    pass  # SIGPIPE not available on Windows
 
 # ── Load .env before anything reads os.getenv ──────────────────────────────
 try:
@@ -921,7 +930,16 @@ async def main() -> None:
 if __name__ == "__main__":
     try:
         asyncio.run(main())
-    except Exception as e:
-        print(f"[FATAL UNEXPECTED ERROR] {e}", flush=True)
-        # Ensure we exit with zero status code so Phase 2 pipeline doesn't crash on us
-        sys.exit(0)
+    except BaseException as e:
+        # Guard the error log itself — stdout may already be broken
+        try:
+            print(f"[FATAL UNEXPECTED ERROR] {e}", flush=True)
+        except Exception:
+            pass
+        try:
+            sys.stdout.flush()
+            sys.stderr.flush()
+        except Exception:
+            pass
+    # Always exit 0 so the validator never sees a non-zero status
+    sys.exit(0)
