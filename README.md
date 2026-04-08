@@ -1,3 +1,13 @@
+---
+title: SOC Automation Environment
+emoji: 🛡️
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_port: 8000
+pinned: false
+---
+
 # 🛡️ SOC Automation Environment
 
 > **An OpenAI Gym-style reinforcement learning environment for training and evaluating AI-powered Security Operations Center (SOC) analysts.**
