@@ -43,5 +43,4 @@ docker-compose.override.yml
 *.swo
 
 # Project specific
-uv.lock
 .gemini/
