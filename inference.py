@@ -54,12 +54,21 @@ BENCHMARK        = os.getenv("BENCHMARK", "soc_automation_env")
 # Detect local Ollama to adjust API behaviour
 IS_OLLAMA = "11434" in API_BASE_URL or "ollama" in API_BASE_URL.lower()
 
-NUM_EPISODES           = 6
+NUM_EPISODES           = 23  # Run ALL 23 scenarios
 MAX_STEPS              = 12
 TEMPERATURE            = 0.4
 MAX_TOKENS             = 600
 SUCCESS_SCORE_THRESHOLD = 60.0
 MAX_TOTAL_REWARD       = 165.0
+
+# One difficulty value per episode so all 23 scenarios are covered:
+# 5 EASY + 6 MEDIUM + 5 HARD + 7 EXPERT = 23
+DIFFICULTY_SCHEDULE = (
+    [1] * 5   # EASY   – scenarios s1‑s5
+  + [2] * 6   # MEDIUM – scenarios s6‑s7, s16‑s19
+  + [3] * 5   # HARD   – scenarios s8‑s10, s20‑s21
+  + [4] * 7   # EXPERT – scenarios s11‑s15, s22‑s23
+)
 
 # Retry settings for transient LLM errors
 LLM_MAX_RETRIES = 3
@@ -798,7 +807,12 @@ async def main() -> None:
         success_count = 0
 
         for episode in range(1, NUM_EPISODES + 1):
-            print(f"\n[EPISODE {episode}/{NUM_EPISODES}] Starting...", file=sys.stderr, flush=True)
+            difficulty = DIFFICULTY_SCHEDULE[episode - 1]
+            diff_name = {1: "EASY", 2: "MEDIUM", 3: "HARD", 4: "EXPERT"}.get(difficulty, "?")
+            print(
+                f"\n[EPISODE {episode}/{NUM_EPISODES}] Starting... (difficulty={diff_name})",
+                file=sys.stderr, flush=True
+            )
 
             # Per-episode defaults (used by finally even if reset fails)
             rewards: List[float] = []
@@ -809,7 +823,7 @@ async def main() -> None:
             log_start(task=TASK_NAME, env=BENCHMARK, model=MODEL_NAME)
 
             try:
-                result = await env.reset()
+                result = await env.reset(difficulty=difficulty, seed=episode * 7)
                 obs = result.observation
                 obs_dict = _obs_to_dict(obs)
 
@@ -927,10 +941,19 @@ async def main() -> None:
         # Final evaluation summary → stderr only
         avg_score = sum(all_episode_scores) / len(all_episode_scores) if all_episode_scores else 0.0
         success_rate = (success_count / NUM_EPISODES) * 100.0 if NUM_EPISODES > 0 else 0.0
+        easy_scores   = [s for i, s in enumerate(all_episode_scores) if DIFFICULTY_SCHEDULE[i] == 1]
+        medium_scores = [s for i, s in enumerate(all_episode_scores) if DIFFICULTY_SCHEDULE[i] == 2]
+        hard_scores   = [s for i, s in enumerate(all_episode_scores) if DIFFICULTY_SCHEDULE[i] == 3]
+        expert_scores = [s for i, s in enumerate(all_episode_scores) if DIFFICULTY_SCHEDULE[i] == 4]
+        def avg(lst): return sum(lst)/len(lst) if lst else 0.0
         print("\n=======================================================", file=sys.stderr)
-        print("[EVALUATION COMPLETE]", file=sys.stderr)
+        print("[EVALUATION COMPLETE — ALL 23 SCENARIOS]", file=sys.stderr)
         print(f"Total Episodes      : {NUM_EPISODES}", file=sys.stderr)
         print(f"Average Score       : {avg_score:.3f}", file=sys.stderr)
+        print(f"  EASY   avg score  : {avg(easy_scores):.3f}  ({len(easy_scores)} episodes)", file=sys.stderr)
+        print(f"  MEDIUM avg score  : {avg(medium_scores):.3f}  ({len(medium_scores)} episodes)", file=sys.stderr)
+        print(f"  HARD   avg score  : {avg(hard_scores):.3f}  ({len(hard_scores)} episodes)", file=sys.stderr)
+        print(f"  EXPERT avg score  : {avg(expert_scores):.3f}  ({len(expert_scores)} episodes)", file=sys.stderr)
         print(f"Overall Success Rate: {success_rate:.1f}%", file=sys.stderr)
         print("=======================================================", file=sys.stderr, flush=True)
 
