@@ -48,6 +48,8 @@ class SocAutomationAction(Action):
 class SocAutomationObservation(Observation):
     """Observation from the Soc Automation Env environment."""
 
+    model_config = ConfigDict(extra="ignore", validate_assignment=True, arbitrary_types_allowed=True)
+
     current_phase: str = Field(
         default="TRIAGE",
         description="Current phase: TRIAGE, INVESTIGATION, CONTAINMENT, REPORTING"

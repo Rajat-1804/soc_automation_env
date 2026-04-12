@@ -7,13 +7,18 @@ Key features:
 - Objective reward grading tied to evidence coverage and correct decisions
 - Strict [0.01, 0.99] reward clamping for OpenEnv Phase 2 validation
 - SUPPORTS_CONCURRENT_SESSIONS via per-instance state
+- SocAutomationEnvironmentState extends openenv State for proper /state endpoint
 """
 from __future__ import annotations
 
 import logging
-from typing import Optional, List, Dict, Any
+import uuid
+from typing import Optional, List, Any, Set
+
+from pydantic import Field, ConfigDict
 
 from openenv.core.env_server import Environment
+from openenv.core.env_server.types import State
 from models import SocAutomationAction, SocAutomationObservation
 from server.scenarios import get_curriculum_scenario, Scenario, DIFFICULTY_NAMES
 from server.database import build_episode_db, EpisodeDatabase
@@ -50,7 +55,6 @@ def _scenario_to_db_seeds(scenario: Scenario):
         logs = scenario.db_logs
     else:
         # Convert legacy dict → minimal log records
-        # Include the key in the message field for reliable search coverage
         logs = []
         for key, val in scenario.logs_data.items():
             is_ip = "." in key and key[0].isdigit()
@@ -102,20 +106,39 @@ def _scenario_to_db_seeds(scenario: Scenario):
     return logs, assets, threat_intel
 
 
-class SocAutomationEnvironmentState:
-    def __init__(self, scenario: Scenario):
-        self.scenario = scenario
-        self.current_phase = "TRIAGE"
-        self.remaining_budget = 5
-        self.step_count = 0
-        self.found_evidence_keys: set = set()
-        self.is_done = False
-        self.simulated_time_mins = 0
-        self.isolated_entities: List[str] = []
-        self.last_actions: List[str] = []
-        self.db: Optional[EpisodeDatabase] = None  # Real investigation DB
+class SocAutomationEnvironmentState(State):
+    """
+    Per-episode mutable state for the SOC environment.
 
-    def close(self):
+    Extends openenv.core.env_server.types.State so the HTTP /state endpoint
+    can serialize it correctly and the framework can introspect step_count
+    and episode_id.  arbitrary_types_allowed lets us store the Scenario
+    dataclass and the in-memory EpisodeDatabase connection.
+    """
+
+    model_config = ConfigDict(
+        arbitrary_types_allowed=True,
+        extra="allow",
+        validate_assignment=True,
+    )
+
+    # Inherited from State: episode_id, step_count
+    scenario: Optional[Any] = None
+    current_phase: str = "TRIAGE"
+    remaining_budget: int = 5
+    found_evidence_keys: Any = Field(default=None)  # Set[str]
+    is_done: bool = False
+    simulated_time_mins: int = 0
+    isolated_entities: List[str] = Field(default_factory=list)
+    last_actions: List[str] = Field(default_factory=list)
+    db: Optional[Any] = None  # EpisodeDatabase (in-memory SQLite)
+
+    def model_post_init(self, __context: Any) -> None:
+        """Ensure found_evidence_keys is always a set after construction."""
+        if self.found_evidence_keys is None:
+            object.__setattr__(self, "found_evidence_keys", set())
+
+    def close(self) -> None:
         if self.db:
             self.db.close()
             self.db = None
@@ -126,7 +149,7 @@ class SocAutomationEnvironment(
 ):
     """
     OpenEnv-compatible SOC Automation environment.
-    
+
     Real SQLite investigation backend: queries search actual indexed records.
     Each episode gets a fresh database seeded from scenario data + noise.
     """
@@ -142,14 +165,25 @@ class SocAutomationEnvironment(
     def state(self) -> SocAutomationEnvironmentState:
         return self._state
 
-    def reset(self, **kwargs) -> SocAutomationObservation:
+    def reset(
+        self,
+        seed: Optional[int] = None,
+        episode_id: Optional[str] = None,
+        **kwargs,
+    ) -> SocAutomationObservation:
+        """Reset the environment, seed a fresh SQLite DB, return initial observation."""
         # Clean up previous episode DB
         if self._state:
             self._state.close()
 
         difficulty = kwargs.get("difficulty", 1)
-        self.scenario = get_curriculum_scenario(difficulty)
-        self._state = SocAutomationEnvironmentState(self.scenario)
+        self.scenario = get_curriculum_scenario(difficulty, seed=seed)
+
+        ep_id = episode_id or str(uuid.uuid4())
+        self._state = SocAutomationEnvironmentState(
+            scenario=self.scenario,
+            episode_id=ep_id,
+        )
 
         # Build the real SQLite investigation database for this episode
         logs, assets, threat_intel = _scenario_to_db_seeds(self.scenario)
@@ -178,7 +212,7 @@ class SocAutomationEnvironment(
             reward=clamp_reward(0.05),
         )
 
-    def step(self, action: SocAutomationAction) -> SocAutomationObservation:  # type: ignore[override]
+    def step(self, action: SocAutomationAction, timeout_s: Optional[float] = None, **kwargs) -> SocAutomationObservation:  # type: ignore[override]
         if self.scenario is None or self._state is None:
             return SocAutomationObservation(
                 current_phase="TRIAGE",
@@ -202,7 +236,7 @@ class SocAutomationEnvironment(
         )
         is_duplicate = action_sig in self._state.last_actions
         self._state.last_actions.append(action_sig)
-        self._state.step_count += 1
+        self._state.step_count += 1  # inherited from State
 
         reward = 0.0
         feedback = ""
