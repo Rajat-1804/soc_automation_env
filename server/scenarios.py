@@ -24,9 +24,15 @@ class Scenario:
     time_limit_mins: int = 20
     # The specific tool query keys that reveal meaningful evidence
     key_evidence_keys: List[str] = field(default_factory=list)
+    # Legacy dict-based responses (kept for backward compat)
     logs_data: Dict[str, str] = field(default_factory=dict)
     threat_intel_data: Dict[str, str] = field(default_factory=dict)
     asset_inventory_data: Dict[str, str] = field(default_factory=dict)
+    # --- NEW: Real SQLite seed data ---
+    db_logs: List[Dict] = field(default_factory=list)
+    db_assets: List[Dict] = field(default_factory=list)
+    db_threat_intel: List[Dict] = field(default_factory=list)
+
 
 
 def get_all_scenarios() -> List[Scenario]:
@@ -44,7 +50,7 @@ def get_all_scenarios() -> List[Scenario]:
             optimal_containment="block_ip",
             mitre_id="T1110",
             time_limit_mins=15,
-            key_evidence_keys=["192.168.1.101"],
+            key_evidence_keys=["192.168.1.101", "jdoe"],
             logs_data={
                 "192.168.1.101": "100+ failed login attempts across 50 different usernames in the last 10 minutes. 1 successful login for user 'jdoe'."
             },
@@ -53,7 +59,25 @@ def get_all_scenarios() -> List[Scenario]:
             },
             asset_inventory_data={
                 "jdoe": "Jane Doe, HR Manager. Access to PII and payroll systems."
-            }
+            },
+            db_logs=[
+                {"timestamp": "2026-04-12T08:01:00Z", "source_ip": "192.168.1.101", "dest_ip": "10.0.0.1", "event_type": "AUTH_FAIL", "message": "Failed login for user 'admin'", "severity": "HIGH", "username": "admin", "port": 443},
+                {"timestamp": "2026-04-12T08:01:05Z", "source_ip": "192.168.1.101", "dest_ip": "10.0.0.1", "event_type": "AUTH_FAIL", "message": "Failed login for user 'root'", "severity": "HIGH", "username": "root", "port": 443},
+                {"timestamp": "2026-04-12T08:01:10Z", "source_ip": "192.168.1.101", "dest_ip": "10.0.0.1", "event_type": "AUTH_FAIL", "message": "Failed login for user 'jdoe'", "severity": "HIGH", "username": "jdoe", "port": 443},
+                {"timestamp": "2026-04-12T08:01:12Z", "source_ip": "192.168.1.101", "dest_ip": "10.0.0.1", "event_type": "AUTH_FAIL", "message": "Failed login for user 'msmith'", "severity": "HIGH", "username": "msmith", "port": 443},
+                {"timestamp": "2026-04-12T08:02:00Z", "source_ip": "192.168.1.101", "dest_ip": "10.0.0.1", "event_type": "AUTH_FAIL", "message": "52 more failures from same source — credential stuffing pattern", "severity": "CRITICAL", "port": 443},
+                {"timestamp": "2026-04-12T08:05:33Z", "source_ip": "192.168.1.101", "dest_ip": "10.0.0.1", "event_type": "AUTH_SUCCESS", "message": "Successful login for user 'jdoe' after 62 failures", "severity": "CRITICAL", "username": "jdoe", "port": 443},
+                {"timestamp": "2026-04-12T08:05:40Z", "source_ip": "192.168.1.101", "dest_ip": "10.0.0.50", "event_type": "FILE_ACCESS", "message": "jdoe session accessed HR payroll export files", "severity": "HIGH", "username": "jdoe"},
+            ],
+            db_assets=[
+                {"hostname": "AUTH-SERVER-01", "ip": "10.0.0.1", "owner": "IT Operations", "department": "IT", "criticality": "CRITICAL", "os": "Ubuntu 22.04", "notes": "SSO authentication server. All company logins go through this."},
+                {"hostname": "HR-DB-01", "ip": "10.0.0.50", "owner": "HR Team", "department": "Human Resources", "criticality": "HIGH", "os": "Windows Server 2022", "notes": "HR database with PII and payroll data."},
+                {"hostname": "jdoe-workstation", "ip": "10.0.0.42", "owner": "Jane Doe", "department": "Human Resources", "criticality": "MEDIUM", "os": "Windows 11", "notes": "Jane Doe HR Manager workstation. Has access to payroll."},
+            ],
+            db_threat_intel=[
+                {"indicator": "192.168.1.101", "indicator_type": "ip", "reputation": "MALICIOUS", "confidence": 95, "context": "IP associated with credential stuffing botnet. 847 abuse reports in past 30 days. Hosts breached credential lists.", "mitre_techniques": "T1110.004 - Credential Stuffing"},
+                {"indicator": "jdoe", "indicator_type": "user", "reputation": "CLEAN", "confidence": 80, "context": "Internal user. Account may be compromised. No prior suspicious activity.", "mitre_techniques": ""},
+            ],
         ),
         Scenario(
             id="s2",
