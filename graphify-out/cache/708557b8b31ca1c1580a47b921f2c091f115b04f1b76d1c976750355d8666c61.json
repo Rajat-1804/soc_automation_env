@@ -1,0 +1,1 @@
+{"nodes": [{"id": "server_init_py", "label": "__init__.py", "file_type": "code", "source_file": "server/__init__.py", "source_location": "L1"}], "edges": [{"source": "server_init_py", "target": "soc_automation_env_environment", "relation": "imports_from", "confidence": "EXTRACTED", "source_file": "server/__init__.py", "source_location": "L9", "weight": 1.0}]}
