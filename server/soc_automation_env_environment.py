@@ -355,7 +355,7 @@ class SocAutomationEnvironment(
         query = (action.tool_query or "").strip()
 
         if not query:
-            return "Error: tool_query is required. Provide an entity (IP, hostname, username, domain) to search."
+            return "Error: tool_query is required. Provide an entity (IP, hostname, username, domain, or base64 payload) to search."
 
         if not self._state.db:
             return "Error: Investigation database unavailable."
@@ -366,11 +366,52 @@ class SocAutomationEnvironment(
             return self._state.db.query_threat_intel(query)
         elif tool == "asset_inventory":
             return self._state.db.query_asset_inventory(query)
+        elif tool == "sandbox":
+            return self._run_sandbox(query)
         else:
             return (
                 f"Error: Unknown tool '{tool}'. "
-                "Available tools: logs | threat_intel | asset_inventory"
+                "Available tools: logs | threat_intel | asset_inventory | sandbox"
             )
+
+    def _run_sandbox(self, payload: str) -> str:
+        """
+        Simulate safe detonation of a suspicious payload (Base64 or URL).
+        Returns simulated IOCs — forces multi-hop tool chaining.
+        """
+        import base64
+        decoded = None
+        try:
+            decoded = base64.b64decode(payload + "==").decode("utf-8", errors="replace")
+        except Exception:
+            decoded = payload
+
+        # Check if the decoded/raw payload matches any threat intel context
+        if self._state.db:
+            result = self._state.db.query_threat_intel(payload[:30])
+            if "MALICIOUS" in result or "SUSPICIOUS" in result:
+                return (
+                    f"[SANDBOX] Payload detonated safely.\n"
+                    f"  Decoded content: {decoded[:120]}\n"
+                    f"  Behavior observed: Attempted outbound connection to C2 server.\n"
+                    f"  Network IOC extracted: {payload[:20]}... resolves to known C2 infrastructure.\n"
+                    f"  MITRE: T1059.003 (PowerShell), T1071.001 (Web Protocol C2)\n"
+                    f"  Verdict: MALICIOUS — recommend immediate isolation."
+                )
+
+        # Might be a real base64 payload
+        if len(payload) > 20 and decoded and decoded != payload:
+            return (
+                f"[SANDBOX] Payload detonated safely.\n"
+                f"  Decoded content: {decoded[:120]}\n"
+                f"  Behavior observed: No suspicious network activity. Payload appears benign.\n"
+                f"  Verdict: CLEAN — no IOCs extracted."
+            )
+
+        return (
+            f"[SANDBOX] Cannot detonate '{payload[:40]}'. "
+            "Provide a Base64-encoded payload or known suspicious string."
+        )
 
     def _score_investigation(self, action: SocAutomationAction, result: str) -> float:
         """
@@ -422,17 +463,52 @@ class SocAutomationEnvironment(
                 return R_CONTAIN_FP
 
     def _score_report(self, action: SocAutomationAction) -> tuple:
-        """Score the final incident report. Returns (reward, feedback_str)."""
+        """
+        Score the final incident report.
+        
+        Checks:
+        1. MITRE ID correctness
+        2. Hallucination penalty: report must not mention entities never found in investigation
+        
+        Returns (reward, feedback_str).
+        """
         expected_mitre = self.scenario.mitre_id
+        report_text = (action.report_text or "").lower()
 
+        # ── Hallucination check ────────────────────────────────────────────────
+        # Extract all IPs mentioned in the report
+        import re
+        mentioned_ips = set(re.findall(r'\b(?:\d{1,3}\.){3}\d{1,3}\b', report_text))
+        # Check all key evidence keys that were actually queried
+        queried_terms = {k.lower() for k in self._state.found_evidence_keys}
+        # Any IP in the report that was never investigated = hallucination
+        hallucinated = {ip for ip in mentioned_ips if ip not in report_text or not any(ip in q for q in queried_terms)}
+        # Only penalize if the IP is real-looking AND was never successfully queried
+        actually_hallucinated = {
+            ip for ip in mentioned_ips
+            if not any(ip in k.lower() for k in self._state.found_evidence_keys)
+            and not any(ip in log_result for log_result in [])  # placeholder — checked via found_evidence_keys
+        }
+        hallucination_penalty = 0.0
+        hallucination_note = ""
+        if actually_hallucinated and self.scenario.is_real_threat:
+            hallucination_penalty = 0.15
+            hallucination_note = (
+                f" ⚠ HALLUCINATION DETECTED: Report mentions "
+                f"{list(actually_hallucinated)[:2]} which were never confirmed by investigation tools."
+            )
+
+        # ── MITRE ID grading ──────────────────────────────────────────────────
         if expected_mitre and expected_mitre != "None":
             if action.mitre_id == expected_mitre:
-                return R_REPORT_CORRECT, (
-                    f"✓ Excellent final report. Correctly identified MITRE {action.mitre_id}."
+                reward = max(0.01, R_REPORT_CORRECT - hallucination_penalty)
+                return reward, (
+                    f"✓ Excellent final report. Correctly identified MITRE {action.mitre_id}.{hallucination_note}"
                 )
             else:
-                return R_REPORT_WRONG, (
-                    f"✗ Report submitted. Wrong MITRE ID. Expected: {expected_mitre}, Got: {action.mitre_id}."
+                reward = max(0.01, R_REPORT_WRONG - hallucination_penalty)
+                return reward, (
+                    f"✗ Report submitted. Wrong MITRE ID. Expected: {expected_mitre}, Got: {action.mitre_id}.{hallucination_note}"
                 )
         else:
             # False positive — should report None

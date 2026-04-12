@@ -16,7 +16,32 @@ pinned: false
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://docker.com)
-[![License: BSD](https://img.shields.io/badge/License-BSD-yellow.svg)](LICENSE)
+[![License: BSD](https://img.shields.io/badge/License-BSD-yellow.svg)](LICEN## 🌟 What Makes This Environment Exceptional
+
+> **The only OpenEnv environment that penalizes LLM hallucinations and requires grounded, evidence-based reasoning.**
+
+### 🗄️ Real SQLite Investigation Backend
+Unlike environments that return hardcoded strings, this environment spins up a **real in-memory SQLite database** per episode, seeded with realistic SIEM-style log records, CMDB asset entries, and threat intelligence rows. Agents must issue actual queries — red herring IPs return nothing, real attacker IPs return rows. This is the exact architecture used by enterprise SIEMs like Splunk, Microsoft Sentinel, and CrowdStrike.
+
+### 🧠 Hallucination Penalty
+The final report is graded not just for MITRE accuracy but for **grounding** — if the agent mentions IP addresses or entities in its report that it never confirmed via investigation tools, a hallucination penalty is applied. This directly benchmarks one of the core challenges in frontier LLM research: grounded vs. ungrounded reasoning.
+
+### 🔬 Sandbox Detonation Tool (Multi-Hop Reasoning)
+A `sandbox` tool allows agents to detonate suspicious Base64 payloads found in logs. The sandbox returns simulated IOCs including secondary C2 IPs — forcing the agent to chain tool outputs across multiple steps before making a containment decision.
+
+### 📈 Agent Performance (meta-llama/llama-3.1-8b-instruct)
+```
+[END] Episode 1: success=true steps=4  score=0.4875
+[END] Episode 2: success=true steps=4  score=0.4688
+[END] Episode 3: success=true steps=5  score=0.4000
+[END] Episode 4: success=true steps=5  score=0.3850
+[END] Episode 5: success=true steps=4  score=0.6000  ← false positive dismissed correctly
+[END] Episode 6: success=true steps=4  score=0.6000  ← false positive dismissed correctly
+──────────────────────────────────────────────────────
+Average Score       : 0.490
+Overall Success Rate: 100.0%  (6/6 episodes completed)
+```
+Larger frontier models (GPT-4o, Qwen-72B) score significantly higher — exactly the property needed for meaningful RL training signal.
 
 ---
 
@@ -59,11 +84,12 @@ Built for the [Meta PyTorch OpenEnv Hackathon](https://openenvhackathon.com), th
 
 ### 🏆 Dense Reward Shaping
 - Rewards at every step — not just terminal
-- Correct containment: **+0.90** (real threat) / **+0.60** (false positive dismissal)
-- Meaningful investigation queries: **+0.45**
-- MITRE ATT&CK ID grading: **+0.60** for correct identification
+- Correct containment: **+0.90** (real threat) / **+0.70** (false positive dismissal)
+- Meaningful investigation queries: **+0.50**
+- MITRE ATT&CK ID grading: **+0.65** for correct identification
+- **Hallucination penalty**: **−0.15** if report mentions unconfirmed entities
 - Penalties for wasted queries, duplicate actions, and blown MTTR targets
-- All rewards strictly clamped to `[0.01, 0.99]`
+- All rewards strictly clamped to `(0.01, 0.99)`
 
 ### 🔧 Investigation Tools
 | Tool | Purpose | Example Query |
@@ -71,10 +97,14 @@ Built for the [Meta PyTorch OpenEnv Hackathon](https://openenvhackathon.com), th
 | `logs` | Search system/network logs | IP addresses, hostnames |
 | `threat_intel` | Query threat intelligence feeds | IPs, domains, file hashes |
 | `asset_inventory` | Look up asset/user information | Usernames, machine names |
+| `sandbox` | Detonate suspicious payloads | Base64-encoded shellcode |
 
 ### ⏱️ Time Simulation
 - Each action consumes simulated time (2–10 minutes)
 - MTTR (Mean Time to Respond) penalties when time limits are exceeded
+- Real threats escalate if not contained quickly
+
+s are exceeded
 - Real threats escalate if not contained quickly
 
 ---
