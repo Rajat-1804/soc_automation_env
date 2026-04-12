@@ -185,7 +185,19 @@ def get_all_scenarios() -> List[Scenario]:
             asset_inventory_data={
                 "Finance-Server": "Critical internal server hosting ERP database.",
                 "HR-Desktop": "Standard employee workstation."
-            }
+            },
+            db_logs=[
+                {"timestamp": "2026-04-12T10:01:00Z", "source_ip": "10.0.1.20", "dest_ip": "10.0.2.50", "event_type": "SMB_CONNECT", "message": "SMB connection from HR-Desktop to Finance-Server on port 445", "severity": "MEDIUM", "username": "kthomas", "process": "svchost.exe"},
+                {"timestamp": "2026-04-12T10:01:05Z", "source_ip": "10.0.1.20", "dest_ip": "10.0.2.50", "event_type": "PROCESS_EXEC", "message": "HR-Desktop: wmiprvse.exe spawned powershell.exe -ep bypass -c Import-Module Impacket", "severity": "CRITICAL", "username": "kthomas", "process": "wmiprvse.exe"},
+                {"timestamp": "2026-04-12T10:01:30Z", "source_ip": "10.0.1.20", "dest_ip": "10.0.2.50", "event_type": "AUTH_SUCCESS", "message": "Finance-Server: NTLM authentication accepted from HR-Desktop for user kthomas", "severity": "HIGH", "username": "kthomas"},
+            ],
+            db_assets=[
+                {"hostname": "HR-Desktop", "ip": "10.0.1.20", "owner": "Karen Thomas", "department": "Human Resources", "criticality": "MEDIUM", "os": "Windows 11", "notes": "HR workstation", "known_safe": False},
+                {"hostname": "Finance-Server", "ip": "10.0.2.50", "owner": "CFO Office", "department": "Finance", "criticality": "CRITICAL", "os": "Windows Server 2022", "notes": "ERP database", "known_safe": False},
+            ],
+            db_threat_intel=[
+                {"indicator": "HR-Desktop", "indicator_type": "hostname", "reputation": "SUSPICIOUS", "confidence": 75, "context": "Impacket toolset detected", "mitre_techniques": "T1021.002"},
+            ]
         ),
         Scenario(
             id="s5",
@@ -207,7 +219,18 @@ def get_all_scenarios() -> List[Scenario]:
             asset_inventory_data={
                 "bsmith": "Bob Smith, Marketing Intern.",
                 "svc_backup": "Backup service account with high privileges across domain."
-            }
+            },
+            db_logs=[
+                {"timestamp": "2026-04-12T02:17:00Z", "source_ip": "10.0.5.88", "dest_ip": "172.16.0.1", "event_type": "AUTH_SUCCESS", "message": "svc_backup interactive logon from workstation WS-MKTG-08", "severity": "HIGH", "username": "svc_backup"},
+                {"timestamp": "2026-04-12T02:17:45Z", "source_ip": "10.0.5.88", "dest_ip": "172.16.0.1", "event_type": "GROUP_CHANGE", "message": "Domain Admins group modified: svc_backup added bsmith", "severity": "CRITICAL", "username": "svc_backup"},
+            ],
+            db_assets=[
+                {"hostname": "WS-MKTG-08", "ip": "10.0.5.88", "owner": "Bob Smith", "department": "Marketing", "criticality": "LOW", "os": "Windows 11", "notes": "bsmith is an intern with no admin rights.", "known_safe": False},
+                {"hostname": "DC-01", "ip": "172.16.0.1", "owner": "IT Operations", "department": "IT", "criticality": "CRITICAL", "os": "Windows Server 2022", "notes": "Primary Domain Controller.", "known_safe": True},
+            ],
+            db_threat_intel=[
+                {"indicator": "svc_backup", "indicator_type": "user", "reputation": "SUSPICIOUS", "confidence": 85, "context": "Service account with domain backup privs active at 2AM. Interactive logon", "mitre_techniques": "T1078.002"},
+            ]
         ),
         Scenario(
             id="s6",
@@ -228,7 +251,20 @@ def get_all_scenarios() -> List[Scenario]:
             },
             asset_inventory_data={
                 "asmith": "Alice Smith, Sales Exec. Currently traveling to UK. Pre-approved remote access."
-            }
+            },
+            db_logs=[
+                {"timestamp": "2026-04-12T09:00:00Z", "source_ip": "198.51.100.10", "dest_ip": "10.0.0.1", "event_type": "AUTH_SUCCESS", "message": "asmith VPN login from corporate New York IP 198.51.100.10", "severity": "LOW", "username": "asmith"},
+                {"timestamp": "2026-04-12T10:45:00Z", "source_ip": "185.220.101.50", "dest_ip": "10.0.0.1", "event_type": "AUTH_SUCCESS", "message": "asmith login from London IP 185.220.101.50 — flagged as impossible travel (105 min gap)", "severity": "MEDIUM", "username": "asmith"},
+                {"timestamp": "2026-04-12T10:46:00Z", "source_ip": "185.220.101.50", "dest_ip": "10.0.0.5", "event_type": "FILE_ACCESS", "message": "asmith accessed standard sales CRM dashboard", "severity": "LOW", "username": "asmith"},
+            ],
+            db_assets=[
+                {"hostname": "VPN-GW-01", "ip": "10.0.0.1", "owner": "IT Operations", "department": "IT", "criticality": "HIGH", "os": "Linux", "notes": "Corporate VPN gateway.", "known_safe": True},
+            ],
+            db_threat_intel=[
+                {"indicator": "185.220.101.50", "indicator_type": "ip", "reputation": "CLEAN", "confidence": 95, "context": "NordVPN commercial exit node in London.", "mitre_techniques": ""},
+                {"indicator": "198.51.100.10", "indicator_type": "ip", "reputation": "CLEAN", "confidence": 100, "context": "Corporate New York office IP range.", "mitre_techniques": ""},
+                {"indicator": "asmith", "indicator_type": "user", "reputation": "CLEAN", "confidence": 90, "context": "Alice Smith, traveling to UK. Pre-approved remote access.", "mitre_techniques": ""},
+            ]
         ),
         Scenario(
             id="s7",
@@ -248,7 +284,17 @@ def get_all_scenarios() -> List[Scenario]:
             },
             asset_inventory_data={
                 "mwilson": "Mike Wilson, Finance Analyst. Access to AP/AR systems and bank transfers."
-            }
+            },
+            db_logs=[
+                {"timestamp": "2026-04-12T11:22:00Z", "source_ip": "10.0.3.77", "dest_ip": "93.184.216.100", "event_type": "EMAIL_CLICK", "message": "mwilson clicked URL in email from hr-update@corp-it-support.net", "severity": "HIGH", "username": "mwilson", "process": "chrome.exe"},
+                {"timestamp": "2026-04-12T11:22:05Z", "source_ip": "10.0.3.77", "dest_ip": "93.184.216.100", "event_type": "HTTP_POST", "message": "POST to corp-it-support.net/login — credentials captured", "severity": "CRITICAL", "username": "mwilson", "process": "chrome.exe"},
+            ],
+            db_assets=[
+                {"hostname": "FIN-WS-07", "ip": "10.0.3.77", "owner": "Mike Wilson", "department": "Finance", "criticality": "HIGH", "os": "Windows 11", "notes": "Finance analyst workstation.", "known_safe": False},
+            ],
+            db_threat_intel=[
+                {"indicator": "corp-it-support.net", "indicator_type": "domain", "reputation": "MALICIOUS", "confidence": 99, "context": "Registered 2 days ago. Hosting phishing page cloning corporate IT portal.", "mitre_techniques": "T1566.002"},
+            ]
         ),
         Scenario(
             id="s18",
