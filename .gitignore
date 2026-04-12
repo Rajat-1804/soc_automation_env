@@ -1,46 +1,63 @@
-# Python
+# ── Python ────────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
-*$py.class
+*.pyo
+*.pyd
+*.pyc
 *.so
-.Python
-env/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
 *.egg
+*.egg-info/
+dist/
+build/
+*.whl
+.eggs/
+
+# ── Virtual environments ───────────────────────────────────────────
 .venv/
 venv/
+env/
 ENV/
+.env.local
+.env.*.local
 
-# Environment variables
+# ── uv ────────────────────────────────────────────────────────────
+# Keep uv.lock committed (reproducible installs), but ignore scratch
+.uv/
+
+# ── Secrets / credentials ─────────────────────────────────────────
 .env
+*.secret
+secrets.json
+hf_token.txt
 
-# Logs and databases
-*.log
-eval_output.txt
-game.log
-inference_out.log
-
-# Docker
-docker-compose.override.yml
-
-# IDEs
-.idea/
+# ── IDE / Editor ──────────────────────────────────────────────────
 .vscode/
+.idea/
 *.swp
 *.swo
+*~
+.DS_Store
+Thumbs.db
 
-# Project specific
-.gemini/
+# ── Graphify (large cache — never commit) ─────────────────────────
+graphify-out/cache/
+graphify-out/logs/
+
+# ── Test / evaluation outputs ─────────────────────────────────────
+outputs/
+results/
+*.log
+*.csv
+*.jsonl
+
+# ── Docker ────────────────────────────────────────────────────────
+.dockerignore
+
+# ── Temporary reference copy (large) ─────────────────────────────
+tmp_reference/
+
+# ── Misc ──────────────────────────────────────────────────────────
+*.tmp
+*.bak
+*.orig
+patch_scenarios.py
