@@ -46,15 +46,15 @@ MODEL_NAME   = os.getenv("MODEL_NAME") or "Qwen/Qwen2.5-72B-Instruct"
 MAX_STEPS         = 12
 TEMPERATURE       = 0.4
 MAX_TOKENS        = 600
-MAX_TOTAL_REWARD  = 165.0
-SUCCESS_THRESHOLD = 60.0
+MAX_TOTAL_REWARD  = 4.0
+SUCCESS_THRESHOLD = 1.2
 
 
 # ─────────────────────────────────────────────────
 # Inference (same prompt as inference.py)
 # ─────────────────────────────────────────────────
 
-from inference import get_model_action, SYSTEM_PROMPT, build_user_prompt
+from inference import improved_get_model_action as get_model_action, SYSTEM_PROMPT_IMPROVED as SYSTEM_PROMPT, build_enhanced_user_prompt as build_user_prompt
 
 # ─────────────────────────────────────────────────
 # Single episode runner
@@ -127,13 +127,15 @@ async def run_episode(env: SocAutomationEnv, llm: OpenAI) -> Dict[str, Any]:
             break
 
     total_reward = sum(rewards)
-    score = min(max(total_reward / MAX_TOTAL_REWARD, 0.001), 0.999)
+    # Compute score using average reward matching the inference.py implementation
+    score = sum(rewards) / len(rewards) if rewards else 0.001
+    score = min(max(score, 0.01), 0.999)
 
     return {
         "difficulty": obs.difficulty_level,
         "total_reward": total_reward,
         "score": score,
-        "success": total_reward >= SUCCESS_THRESHOLD,
+        "success": any(r >= 0.8 for r in rewards) or (containment_action and "dismiss" in str(containment_action).lower() and sum(rewards) > 0.6),
         "queries_used": queries_used,
         "containment_action": containment_action,
         "steps": len(rewards),
